@@ -9,6 +9,43 @@
 #include <sched.h>//linux scheduler
 #include <pthread.h>//thread stuff
 
+//From copilot, I did these for using perf_event headers in c++,
+//prompt "I plan to keep it simple and effective. I was told by a friend that instead of using perf in command line, that I should use perf_events headers in c++ instead."
+//prompt "What libraries do I need for this first? (what do I need to #include?)"
+//required headers for perf_event_open
+#include <linux/perf_event.h> //perf_event_attr, event types
+#include <linux/hw_breakpoint.h> //sometimes needed for HW events
+#include <sys/syscall.h> //syscall()
+#include <sys/ioctl.h> //ioctl()
+#include <unistd.h> //read(), close()
+#include <string.h> //memset()
+#include <stdint.h> //uint64_t
+#include <stdlib.h> //exit(), malloc()
+#include <stdio.h> //printf()
+
+#include <random>//recommended by gemini for random generation
+
+//Helper Functions
+//making vector of randomized long integers, modified version of code written by gemini, prompt "how to produce vector of random long in c++"
+std::vector<long> GenerateRandomVector(long num){
+      //generates vector with length num
+      std::vector<long> results(num);
+      //Initialize random number engine
+      std::random_device rd; //seed generator
+      std::mt19937_64 gen(rd()); //64-bit Mersenne Twister engine (perfect for long/64-bit integers)
+      //define the distribution range
+      std::uniform_int_distribution<long> distrib(std::numeric_limits<long>::min(), std::numeric_limits<long>::max());
+      //fill the vector using std::generate and a lambda function
+      std::generate(results.begin(), results.end(), [&]() {return distrib(gen);});
+      //return the randomized vector
+      return results;
+}
+
+
+
+
+
+
 //Experimental knobs:
 //-access pattern: sequential vs random: strides near 64B,256B,1024B
 //-read/write ratio: 100% read, 100% write, 70/30, and 50/50 where supported
@@ -147,7 +184,18 @@ int main(){
     CPU_SET(core_id, &cpuset);
     pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
 
-    //
+    //Deliverables #5-8 here:
+
+    //5.) Working-set sweep: annotate L1/L2/LLC/DRAM transition regions.
+    //-->AXPY
+    //6.) Cache-miss impact: vary footprint or access pattern and correlate perf counters with runtime.
+    //-->AXPY
+    //7.) TLB-miss impact: vary page locality and evaluate huge pages where possible.
+    //-->DotProductReduction
+    //8.) Show one benchmark pitfall, such as accidentally measuring cache reuse instead of DRAM, failing to pin threads, or allowing frequency scaling to distort results.
+    //-->AXPY
+
+    //end here
     return 1;
 }
 /**
@@ -214,3 +262,5 @@ mlc --memory_bandwidth_scan
       prints memory bandwidth across entire memory for each 1 GB address range
 
 There are more options for each of the commands above. Those are documented in the readme file in more detail and can be downloaded*/
+
+//NOTE: FOR Project 3, use FIO instead of programming (cooper said this)
