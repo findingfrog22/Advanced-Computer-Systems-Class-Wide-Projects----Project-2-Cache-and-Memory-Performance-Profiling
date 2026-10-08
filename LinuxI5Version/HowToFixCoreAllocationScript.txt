@@ -1,0 +1,38 @@
+
+go into root with: su -
+type in your password
+
+some other terminal parts below:
+
+root@timothy-inspiron73062n1:~# sudo bash -c '
+# Get current user ID and shell cgroup path
+UID_VAL=$(id -u)
+SHELL_CG=$(cut -d: -f3 /proc/$$/cgroup)
+
+echo "--- Clearing cgroup cpuset limits ---"
+
+# Step 1: Force reset user.slice and user@UID.service via systemd
+systemctl set-property user-${UID_VAL}.slice AllowedCPUs= 2>/dev/null || true
+systemctl set-property user@${UID_VAL}.service AllowedCPUs= 2>/dev/null || true
+
+# Step 2: Iterate through every nested directory in /sys/fs/cgroup and write max/0-7
+find /sys/fs/cgroup/user.slice -name "cpuset.cpus" 2>/dev/null | while read -r line; do
+    echo "0-7" > "$line" 2>/dev/null || echo "max" > "$line" 2>/dev/null || true 
+done
+
+echo "Done."
+'
+--- Clearing cgroup cpuset limits ---
+Done.
+root@timothy-inspiron73062n1:~# taskset -p 0xff $$
+pid 2712's current affinity mask: ff
+pid 2712's new affinity mask: ff
+root@timothy-inspiron73062n1:~# taskset -c 3 stress-ng --cpu 1 --timeout 10s
+stress-ng: info:  [2911] setting to a 10 secs run per stressor
+stress-ng: info:  [2911] dispatching hogs: 1 cpu
+stress-ng: info:  [2911] skipped: 0
+stress-ng: info:  [2911] passed: 1: cpu (1)
+stress-ng: info:  [2911] failed: 0
+stress-ng: info:  [2911] metrics untrustworthy: 0
+stress-ng: info:  [2911] successful run completed in 10.00 secs
+root@timothy-inspiron73062n1:~# 
