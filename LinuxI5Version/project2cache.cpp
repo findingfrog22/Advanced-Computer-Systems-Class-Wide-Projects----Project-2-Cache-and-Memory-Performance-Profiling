@@ -44,8 +44,6 @@ std::vector<long> GenerateRandomVector(long num){
 
 
 
-
-
 //Experimental knobs:
 //-access pattern: sequential vs random: strides near 64B,256B,1024B
 //-read/write ratio: 100% read, 100% write, 70/30, and 50/50 where supported
@@ -133,6 +131,36 @@ long DotProductReduction(std::vector<long>& x, std::vector<long>& y, size_t stri
     **/
 }
 
+//Benchmarking functions
+
+void BenchmarkWorkingSetSweep(std::vector<long>& workingSet){
+      //I was thinking something along these lines:
+      //0. for each workingsetsize in workingSet:
+      //--> 1. prepare randomized data of size workingsetsize
+      //--> 2. benchmark
+      //--> 3. repeat steps 1 and 2, for 20 runs, and average results
+      //4. write results to output txt file
+}
+
+void BenchmarkCacheMissImpact(long mxsize, std::vector<size_t>& strides){
+      //I was thinking something along these lines:
+      //0. for each stride in strides:
+      //--> 1. prepare randomized data mxsize
+      //--> 2. benchmark
+      //--> 3. repeat steps 1 and 2, for 20 runs, and average results
+      //4. write results to output txt file
+}
+
+void BenchmarkTLBImpact(std::vector<size_t>& pageSizes, std::vector<size_t>& pageStrides){
+      //I wasn't quite sure about this one
+      //0. Prepare 4KiB page file data
+      //--> 1. Stride sweep this? maybe just a good stride and bad stride?
+      //0. Prepare large page file data (2MiB?)
+      //--> 1. Stride sweep this? maybe just a good stride and a bad stride?
+      //Idk about this one yet
+
+}
+
 //main is a work in progress
 int main(){
     //setup/knobs
@@ -157,6 +185,17 @@ int main(){
         8, //64Bytes (8 element stride of 64-bit elements)
         32, //256Bytes (32 element stride of 64-bit elements)
         128 //1024Bytes (128 element stride of 64-bit elements)
+    };
+
+    std::vector<size_t> pageSizes = {
+      512, //~4KiB (standard page size)
+      262'144 //~2MiB (extremelly large page size)
+    };
+
+    std::vector<size_t> pageStrides = {
+      1, //good for both 4KiB pages and 2MiB pages
+      512, //bad for 4KiB pages (slow, many TLB misses)
+      262144 //bad locality, still fast, low TLB misses (for 2MiB pages)
     };
 
     //Note: this group of code below is for thread pinning. From Copilot, it pins to thread0, "first off, we should do thread pinning"
@@ -188,10 +227,13 @@ int main(){
 
     //5.) Working-set sweep: annotate L1/L2/LLC/DRAM transition regions.
     //-->AXPY
+    BenchmarkWorkingSetSweep(workingSetSizes);
     //6.) Cache-miss impact: vary footprint or access pattern and correlate perf counters with runtime.
     //-->AXPY
+    BenchmarkCacheMissImpact(8'388'608, strides);//big DRAM sized allocations
     //7.) TLB-miss impact: vary page locality and evaluate huge pages where possible.
     //-->DotProductReduction
+    BenchmarkTLBImpact(pageSizes, pageStrides);
     //8.) Show one benchmark pitfall, such as accidentally measuring cache reuse instead of DRAM, failing to pin threads, or allowing frequency scaling to distort results.
     //-->AXPY
 
