@@ -1,0 +1,31 @@
+Note: Throughput is Bandwidth in GB/s, plot with latency, not injected delay.\n
+Intel(R) Memory Latency Checker - v3.13
+Command line parameters: --loaded_latency 
+
+Using buffer size of 100.000MiB/thread for reads and an additional 100.000MiB/thread for writes
+
+Measuring Loaded Latencies for the system
+Using all the threads from each core if Hyper-threading is enabled
+Using Read-only traffic type
+Inject	Latency	Bandwidth
+Delay	(ns)	MB/sec
+==========================
+ 00000	134.18	 39096.8
+ 00002	133.99	 39106.6
+ 00008	134.03	 39247.8
+ 00015	133.79	 39480.9
+ 00050	124.55	 19198.5
+ 00100	122.24	 13129.9
+ 00200	126.67	  7790.6
+ 00300	126.25	  5543.1
+ 00400	126.28	  4367.9
+ 00500	125.97	  3631.6
+ 00700	125.32	  2778.3
+ 01000	125.79	  2115.6
+ 01300	129.17	  1738.5
+ 01700	132.25	  1438.8
+ 02500	156.51	  1055.3
+ 03500	182.74	   813.5
+ 05000	188.20	   666.8
+ 09000	189.83	   519.5
+ 20000	190.38	   417.9

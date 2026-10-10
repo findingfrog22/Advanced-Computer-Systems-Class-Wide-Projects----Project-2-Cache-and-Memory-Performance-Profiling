@@ -1,0 +1,35 @@
+L1-I 16KB:\n
+Intel(R) Memory Latency Checker - v3.13
+Command line parameters: --idle_latency -b16k 
+
+Using buffer size of 0.016MiB
+Each iteration took 5.0 base frequency clocks (	3.6	ns)
+
+\nL1-D 36KB:\n
+Intel(R) Memory Latency Checker - v3.13
+Command line parameters: --idle_latency -b36k 
+
+Using buffer size of 0.035MiB
+Each iteration took 5.0 base frequency clocks (	3.6	ns)
+
+\nL2 1MB:\n
+Intel(R) Memory Latency Checker - v3.13
+Command line parameters: --idle_latency -b1m 
+
+Using buffer size of 1.000MiB
+Each iteration took 26.5 base frequency clocks (	19.2	ns)
+
+\nL3 6MB:\n
+Intel(R) Memory Latency Checker - v3.13
+Command line parameters: --idle_latency -b6m 
+
+Using buffer size of 6.000MiB
+Each iteration took 111.1 base frequency clocks (	80.4	ns)
+
+\nDRAM 64MB:\n
+Intel(R) Memory Latency Checker - v3.13
+Command line parameters: --idle_latency -b64m 
+
+Using buffer size of 64.000MiB
+Each iteration took 259.3 base frequency clocks (	187.6	ns)
+

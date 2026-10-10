@@ -1,0 +1,48 @@
+64B granularity (1 Cache Line), 128MiB buffer (Latency Only):\n
+Intel(R) Memory Latency Checker - v3.13
+Random access range must be at least 2 cache lines; 1 was given
+\n4KiB granularity (Standard Page File Size, 64 Cache Lines), 128MiB buffer (Latency Only):\n
+Intel(R) Memory Latency Checker - v3.13
+Command line parameters: --latency_matrix -D64 -b128MiB 
+
+Using buffer size of 128.000MiB
+Measuring idle latencies for sequential access (in ns)...
+		Numa node
+Numa node	     0	
+       0	 199.4	
+\n128KiB granularity (Large page file, 2048 Cache Lines), 128MiB buffer (Latency Only):\n
+Intel(R) Memory Latency Checker - v3.13
+Command line parameters: --latency_matrix -D2048 -b128MiB 
+
+Using buffer size of 128.000MiB
+Measuring idle latencies for sequential access (in ns)...
+		Numa node
+Numa node	     0	
+       0	 198.2	
+\n2MiB granularity (Very Large page file, 32768 Cache Lines), 128MiB buffer (Latency Only):\n
+Intel(R) Memory Latency Checker - v3.13
+Command line parameters: --latency_matrix -D32768 -b128MiB 
+
+Using buffer size of 128.000MiB
+Measuring idle latencies for sequential access (in ns)...
+		Numa node
+Numa node	     0	
+       0	 190.3	
+\n4MiB granularity (Extremelly Large page file, 65536 Cache Lines), 128MiB buffer (Latency Only):\n
+Intel(R) Memory Latency Checker - v3.13
+Command line parameters: --latency_matrix -D65536 -b128MiB 
+
+Using buffer size of 128.000MiB
+Measuring idle latencies for sequential access (in ns)...
+		Numa node
+Numa node	     0	
+       0	 199.6	
+\n64MiB granularity (No caching, DRAM-only page file, 1048576 Cache Lines), 128MiB buffer (Latency Only):\n
+Intel(R) Memory Latency Checker - v3.13
+Command line parameters: --latency_matrix -D1048576 -b128MiB 
+
+Using buffer size of 128.000MiB
+Measuring idle latencies for sequential access (in ns)...
+		Numa node
+Numa node	     0	
+       0	 199.6	

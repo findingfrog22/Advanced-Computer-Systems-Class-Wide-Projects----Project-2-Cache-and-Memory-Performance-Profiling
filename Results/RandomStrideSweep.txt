@@ -1,0 +1,27 @@
+64B stride, 128MiB buffer (Latency Only):\n
+Intel(R) Memory Latency Checker - v3.13
+Command line parameters: --latency_matrix -r -l64 -b128MiB 
+
+Using buffer size of 128.000MiB
+Measuring idle latencies for random access (in ns)...
+		Numa node
+Numa node	     0	
+       0	 207.1	
+\n256B stride, 128MiB buffer (Latency Only):\n
+Intel(R) Memory Latency Checker - v3.13
+Command line parameters: --latency_matrix -r -l256 -b128MiB 
+
+Using buffer size of 128.000MiB
+Measuring idle latencies for random access (in ns)...
+		Numa node
+Numa node	     0	
+       0	 205.5	
+\n1024B stride, 128MiB buffer (Latency Only):\n
+Intel(R) Memory Latency Checker - v3.13
+Command line parameters: --latency_matrix -r -l1024 -b128MiB 
+
+Using buffer size of 128.000MiB
+Measuring idle latencies for random access (in ns)...
+		Numa node
+Numa node	     0	
+       0	 205.3	
