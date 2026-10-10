@@ -25,6 +25,8 @@
 
 #include <random>//recommended by gemini for random generation
 
+#include <sys/mman.h> //required for mmap
+
 //Helper Functions
 //making vector of randomized long integers, modified version of code written by gemini, prompt "how to produce vector of random long in c++"
 std::vector<long> GenerateRandomVector(long num){
@@ -41,7 +43,41 @@ std::vector<long> GenerateRandomVector(long num){
       return results;
 }
 
+//This benchmarking call harness was provided and written by copilot
+static long perf_event_open(struct perf_event_attr *hw_event,
+                            pid_t pid, int cpu, int group_fd,
+                            unsigned long flags)
+{
+    return syscall(__NR_perf_event_open, hw_event, pid, cpu,
+                   group_fd, flags);
+}
 
+struct PerfCounter {
+    int fd;
+    uint64_t value;
+
+    void setup(uint32_t type, uint64_t config) {
+        struct perf_event_attr pe;
+        memset(&pe, 0, sizeof(pe));
+        pe.type = type;
+        pe.size = sizeof(pe);
+        pe.config = config;
+        pe.disabled = 1;
+        pe.exclude_kernel = 1;
+        pe.exclude_hv = 1;
+        fd = perf_event_open(&pe, 0, -1, -1, 0);
+    }
+
+    void start() {
+        ioctl(fd, PERF_EVENT_IOC_RESET, 0);
+        ioctl(fd, PERF_EVENT_IOC_ENABLE, 0);
+    }
+
+    void stop() {
+        ioctl(fd, PERF_EVENT_IOC_DISABLE, 0);
+        read(fd, &value, sizeof(uint64_t));
+    }
+};
 
 
 //Experimental knobs:
@@ -133,6 +169,8 @@ long DotProductReduction(std::vector<long>& x, std::vector<long>& y, size_t stri
 
 //Benchmarking functions
 
+
+/**
 void BenchmarkWorkingSetSweep(std::vector<long>& workingSet){
       //I was thinking something along these lines:
       //0. for each workingsetsize in workingSet:
@@ -159,6 +197,281 @@ void BenchmarkTLBImpact(std::vector<size_t>& pageSizes, std::vector<size_t>& pag
       //--> 1. Stride sweep this? maybe just a good stride and a bad stride?
       //Idk about this one yet
 
+}
+**/
+
+//These are the benchmarking functions written by copilot. Prompt "Here is my code so far" (context, "writing benchmarking harnesses using perf_event headers in c++")
+//modified by me, for testing methodology reasons
+void BenchmarkWorkingSetSweep(std::vector<long>& workingSet) {
+    const int trials = 20;
+
+    std::cout << "WS,avg_cycles,avg_instructions,avg_l1d_hitrate,avg_llc_hitrate\n";
+
+    for (long N : workingSet) {
+        std::vector<long> x(N), y(N);
+        //for (long i = 0; i < N; i++) {
+        //    x[i] = i;
+        //    y[i] = i * 2;
+        //}
+        x = GenerateRandomVector(N);
+        y = GenerateRandomVector(N);
+
+        uint64_t totalCycles = 0;
+        uint64_t totalInstr   = 0;
+        double l1hitrate = 0.0;
+        double l3hitrate = 0.0;
+
+        for (int t = 0; t < trials; t++) {
+
+            // Warmup (not measured)
+            for (long i = 0; i < N; i += 64)//touches every cache line of 64bytes
+                y[i] += x[i];
+
+            PerfCounter cycles, instr, l1dmiss, l3miss;//optionally llc references
+            PerfCounter l1accesses, l3accesses;//these are how many read accesses per cache, i want hitrate
+            cycles.setup(PERF_TYPE_HARDWARE, PERF_COUNT_HW_CPU_CYCLES);
+            instr.setup(PERF_TYPE_HARDWARE, PERF_COUNT_HW_INSTRUCTIONS);
+            l1dmiss.setup(PERF_TYPE_HW_CACHE, PERF_COUNT_HW_CACHE_L1D | (PERF_COUNT_HW_CACHE_OP_READ << 8) | (PERF_COUNT_HW_CACHE_RESULT_MISS << 16));
+            l3miss.setup(PERF_TYPE_HW_CACHE, PERF_COUNT_HW_CACHE_LL | (PERF_COUNT_HW_CACHE_OP_READ << 8) | (PERF_COUNT_HW_CACHE_RESULT_MISS << 16));
+            l1accesses.setup(PERF_TYPE_HW_CACHE, PERF_COUNT_HW_CACHE_L1D | (PERF_COUNT_HW_CACHE_OP_READ << 8) | (PERF_COUNT_HW_CACHE_RESULT_ACCESS << 16));
+            l3accesses.setup(PERF_TYPE_HW_CACHE, PERF_COUNT_HW_CACHE_LL | (PERF_COUNT_HW_CACHE_OP_READ << 8) | (PERF_COUNT_HW_CACHE_RESULT_ACCESS << 16));
+
+
+            cycles.start();
+            instr.start();
+            l1dmiss.start();
+            l3miss.start();
+            l1accesses.start();
+            l3accesses.start();
+
+            AXPY(3, x, y, 1, 0);
+
+            cycles.stop();
+            instr.stop();
+            l1dmiss.stop();
+            l3miss.stop();
+            l1accesses.stop();
+            l3accesses.stop();
+
+            totalCycles += cycles.value;
+            totalInstr  += instr.value;
+            l1hitrate += 1.0 - (l1dmiss.value / (double)l1accesses.value);
+            l3hitrate += 1.0 - (l3miss.value / (double)l3accesses.value);
+
+        }
+
+        std::cout << N << ","
+                  << (totalCycles / trials) << ","
+                  << (totalInstr  / trials) << ","
+                  << (l1hitrate / (double)trials) << ","
+                  << (l3hitrate / (double)trials)
+                  << "\n";
+    }
+}
+
+
+void BenchmarkCacheMissImpact(long N, std::vector<size_t>& strides) {
+    const int trials = 20;
+
+    std::vector<long> x(N), y(N);
+    //for (long i = 0; i < N; i++) {
+    //    x[i] = i;
+    //    y[i] = i * 2;
+    //}
+    x = GenerateRandomVector(N);
+    y = GenerateRandomVector(N);
+
+    std::cout << "stride,avg_cycles,avg_L1_hitrate,avg_LLC_hitrate,avg_L1miss,avg_LLCmiss\n";
+
+    for (size_t stride : strides) {
+        if (stride == 0) continue;
+
+        uint64_t totalCycles = 0;
+        uint64_t totalL1     = 0;
+        uint64_t totalLLC    = 0;
+        double l1hitrate = 0.0;
+        double llchitrate = 0.0;
+
+        for (int t = 0; t < trials; t++) {
+
+            PerfCounter cycles, l1, llc;//optionally instructions,//we should get l1 loads and llc loads so we can get the cache hit rate
+            PerfCounter l1accesses, llcaccesses;//this is how many accesses per cache layer
+            cycles.setup(PERF_TYPE_HARDWARE, PERF_COUNT_HW_CPU_CYCLES);
+
+            l1.setup(PERF_TYPE_HW_CACHE,
+                PERF_COUNT_HW_CACHE_L1D |
+                (PERF_COUNT_HW_CACHE_OP_READ << 8) |
+                (PERF_COUNT_HW_CACHE_RESULT_MISS << 16));
+
+            llc.setup(PERF_TYPE_HW_CACHE,
+                PERF_COUNT_HW_CACHE_LL |
+                (PERF_COUNT_HW_CACHE_OP_READ << 8) |
+                (PERF_COUNT_HW_CACHE_RESULT_MISS << 16));
+
+            l1accesses.setup(PERF_TYPE_HW_CACHE,
+                PERF_COUNT_HW_CACHE_L1D |
+                (PERF_COUNT_HW_CACHE_OP_READ << 8) |
+                (PERF_COUNT_HW_CACHE_RESULT_ACCESS << 16));
+
+            llcaccesses.setup(PERF_TYPE_HW_CACHE,
+                PERF_COUNT_HW_CACHE_LL |
+                (PERF_COUNT_HW_CACHE_OP_READ << 8) |
+                (PERF_COUNT_HW_CACHE_RESULT_ACCESS << 16));
+
+            cycles.start();
+            l1.start();
+            llc.start();
+            l1accesses.start();
+            llcaccesses.start();
+
+            AXPY(3, x, y, stride, 0);
+
+            cycles.stop();
+            l1.stop();
+            llc.stop();
+            l1accesses.stop();
+            llcaccesses.stop();
+
+            totalCycles += cycles.value;
+            totalL1     += l1.value;
+            totalLLC    += llc.value;
+            l1hitrate += 1.0 - (l1.value / (double)l1accesses.value);
+            llchitrate += 1.0 - (llc.value / (double)llcaccesses.value);
+        }
+
+        std::cout << stride << ","
+                  << (totalCycles / trials) << ","
+                  << (l1hitrate / (double)trials) << ","
+                  << (llchitrate / (double)trials) << ","
+                  << (totalL1     / trials) << ","
+                  << (totalLLC    / trials)
+                  << "\n";
+    }
+}
+
+long* AllocateHugePageArray(size_t numElements) {
+    size_t bytes = numElements * sizeof(long);
+
+    void* ptr = mmap(nullptr, bytes,
+                     PROT_READ | PROT_WRITE,
+                     MAP_PRIVATE | MAP_ANONYMOUS | MAP_HUGETLB,
+                     -1, 0);
+
+    if (ptr == MAP_FAILED) {
+        ptr = mmap(nullptr, bytes,
+                   PROT_READ | PROT_WRITE,
+                   MAP_PRIVATE | MAP_ANONYMOUS,
+                   -1, 0);
+    }
+
+    return reinterpret_cast<long*>(ptr);
+}
+
+void BenchmarkTLBImpact(std::vector<size_t>& pageSizes,
+                        std::vector<size_t>& pageStrides)
+{
+    const int trials = 20;
+    long N = 8'388'608; // 64MB
+
+    std::cout << "pageSize,strideElems,avg_cycles,avg_dTLBmiss,avg_dTLB_hitrate\n";
+
+    // --- Small pages (std::vector)
+    std::vector<long> x(N), y(N);
+    //for (long i = 0; i < N; i++) {
+    //    x[i] = i;
+    //    y[i] = i * 2;
+    //}
+    x = GenerateRandomVector(N);
+    y = GenerateRandomVector(N);
+
+    for (size_t strideElems : pageStrides) {
+        uint64_t totalCycles = 0;
+        uint64_t totalTLB    = 0;
+        double tlbhitrate = 0.0;
+
+        for (int t = 0; t < trials; t++) {
+            PerfCounter cycles, tlb;//dtlb load misses, dtlb loads, optionally instructions
+            PerfCounter tlbaccesses;//dtlb read accessses
+            cycles.setup(PERF_TYPE_HARDWARE, PERF_COUNT_HW_CPU_CYCLES);
+
+            tlb.setup(PERF_TYPE_HW_CACHE,
+                PERF_COUNT_HW_CACHE_DTLB |
+                (PERF_COUNT_HW_CACHE_OP_READ << 8) |
+                (PERF_COUNT_HW_CACHE_RESULT_MISS << 16));
+
+            tlbaccesses.setup(PERF_TYPE_HW_CACHE, PERF_COUNT_HW_CACHE_DTLB | (PERF_COUNT_HW_CACHE_OP_READ << 8) | (PERF_COUNT_HW_CACHE_RESULT_ACCESS << 16));
+
+            cycles.start();
+            tlb.start();
+            tlbaccesses.start();
+
+            long s = DotProductReduction(x, y, strideElems, 0);
+
+            cycles.stop();
+            tlb.stop();
+            tlbaccesses.stop();
+
+            totalCycles += cycles.value;
+            totalTLB    += tlb.value;
+            tlbhitrate += 1.0 - (tlb.value / (double)tlbaccesses.value);
+        }
+
+        std::cout << pageSizes[0] << "," << strideElems << ","
+                  << (totalCycles / trials) << ","
+                  << (totalTLB    / trials) << ","
+                  << (tlbhitrate / (double)trials)
+                  << "\n";
+    }
+
+    // --- Huge pages
+    long* xHuge = AllocateHugePageArray(N);
+    long* yHuge = AllocateHugePageArray(N);
+    for (long i = 0; i < N; i++) {
+        xHuge[i] = i;
+        yHuge[i] = i * 2;
+    }
+    //xHuge = GenerateRandomVector(N);
+
+
+    for (size_t strideElems : pageStrides) {
+        uint64_t totalCycles = 0;
+        uint64_t totalTLB    = 0;
+        double tlbhitrate = 0.0;
+
+        for (int t = 0; t < trials; t++) {
+            PerfCounter cycles, tlb, tlbaccesses;
+            cycles.setup(PERF_TYPE_HARDWARE, PERF_COUNT_HW_CPU_CYCLES);
+
+            tlb.setup(PERF_TYPE_HW_CACHE,
+                PERF_COUNT_HW_CACHE_DTLB |
+                (PERF_COUNT_HW_CACHE_OP_READ << 8) |
+                (PERF_COUNT_HW_CACHE_RESULT_MISS << 16));
+            
+            tlbaccesses.setup(PERF_TYPE_HW_CACHE, PERF_COUNT_HW_CACHE_DTLB | (PERF_COUNT_HW_CACHE_OP_READ << 8) | (PERF_COUNT_HW_CACHE_RESULT_ACCESS << 16));
+
+            cycles.start();
+            tlb.start();
+            tlbaccesses.start();
+
+            long s = 0;
+            for (size_t i = 0; i < N; i += strideElems)
+                s += xHuge[i] * yHuge[i];
+
+            cycles.stop();
+            tlb.stop();
+            tlbaccesses.stop();
+
+            totalCycles += cycles.value;
+            totalTLB    += tlb.value;
+            tlbhitrate += 1.0 - (tlb.value / (double)tlbaccesses.value);
+        }
+
+        std::cout << pageSizes[1] << "," << strideElems << ","
+                  << (totalCycles / trials) << ","
+                  << (totalTLB    / trials) << ","
+                  << (tlbhitrate / (double)trials)
+                  << "\n";
+    }
 }
 
 //main is a work in progress
@@ -239,6 +552,9 @@ int main(){
 
     //end here
     return 1;
+    //NOTE: how to compile and run properly: gcc project2cache.cpp -lstdc++ -o project2cache.exe
+    //that -lstdc++ is what causes the linker for the libraries to work
+    //NOTE: you must also run this with sudo or else the perf benchmark counters won't work
 }
 /**
  * NOTES ON intel MLC:

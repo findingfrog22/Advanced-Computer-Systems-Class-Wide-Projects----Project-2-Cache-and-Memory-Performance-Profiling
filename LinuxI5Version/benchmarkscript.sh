@@ -36,7 +36,8 @@ cpupower idle-set -D 0 #forces C0 active state by limiting it to 0 microseconds 
 #Finally, lock the frequency to 1.40GHz
 cpupower frequency-set -f 1400MHz #this sets all cores to 1.4GHz (unit is in KHz by default)
 # Clear explicit frequency constraints
-cpupower frequency-set -u 1400MHz -d 1400MHz
+cpupower frequency-set -d 1400MHz #sets lower frequency minimum
+cpupower frequency-set -u 1400MHz #sets max frequency
 cpupower frequency-info #this prints out the current frequency info for all cores, which should now be in userspace mode
 #cpupower -c 0 monitor
 
@@ -66,7 +67,7 @@ touch IntensitySweep.txt
 > IntensitySweep.txt
 
 echo "Note: Cache capacities and buffer sizes are based on CPU model, so you may need to adjust it for yours (test is i5 1135g7)"
-
+<<'COMMENT_BLOCK'
 #Intel MLC Benchmarking (Parts 1-4):
 #1.) Zero-queue baselines: per-level latency table with units and CPU-frequency conversion where useful.
 echo "L1-I 16KB:\n" >> ZeroQueueBaselines.txt
@@ -142,7 +143,7 @@ sudo ./mlc --loaded_latency -W6 | tee -a ReadWriteMixSweep.txt #basically 100% w
 #use sudo ./mlc --loaded_latency -d(injected latency ns)
 echo "Note: Throughput is Bandwidth in GB/s, plot with latency, not injected delay.\n" >> IntensitySweep.txt
 sudo ./mlc --loaded_latency | tee -a IntensitySweep.txt #use the default for sweeping, it is easier
-
+COMMENT_BLOCK
 #for MLC, the ElementWiseMultiply kernel would have been good
 
 #then set up for kernel benchmarking
@@ -156,13 +157,17 @@ sudo ./mlc --loaded_latency | tee -a IntensitySweep.txt #use the default for swe
 #-->Dot Product Reduction Kernel
 #8.) Show one benchmark pitfall, such as accidentally measuring cache reuse instead of DRAM, failing to pin threads, or allowing frequency scaling to distort results.
 
+#NOTE: how to compile and run properly: gcc project2cache.cpp -lstdc++ -o project2cache.exe
+#that -lstdc++ is what causes the linker for the libraries to work
+#NOTE: you must also run this with sudo or else the perf benchmark counters won't work
+
 
 #undoing the testing environment to return the system back to normal config
 #puts intel pstate back to active mode, which allows for dynamic frequency scaling
 echo active | tee /sys/devices/system/cpu/intel_pstate/status
 cpupower frequency-set -g powersave
 # Clear explicit frequency constraints
-cpupower frequency-set -u 100% -d 0%
+#cpupower frequency-set -u 100% -d 0% #this is redundant due to the change in governor
 # 1. Re-enable C-states and clear latency constraints
 cpupower idle-set -D 0ms
 cpupower idle-set -E
