@@ -27,6 +27,8 @@
 
 #include <sys/mman.h> //required for mmap
 
+#include <fstream> //for writing output to .csv files
+
 //Helper Functions
 //making vector of randomized long integers, modified version of code written by gemini, prompt "how to produce vector of random long in c++"
 std::vector<long> GenerateRandomVector(long num){
@@ -76,6 +78,10 @@ struct PerfCounter {
     void stop() {
         ioctl(fd, PERF_EVENT_IOC_DISABLE, 0);
         read(fd, &value, sizeof(uint64_t));
+        //this exit part below makes sure that it doesn't leak fd file headers
+        //this is fine as long as you never need to reuse the same PerfCounter object after stop(),
+        ::close(fd);
+        fd = -1;
     }
 };
 
@@ -203,9 +209,16 @@ void BenchmarkTLBImpact(std::vector<size_t>& pageSizes, std::vector<size_t>& pag
 //These are the benchmarking functions written by copilot. Prompt "Here is my code so far" (context, "writing benchmarking harnesses using perf_event headers in c++")
 //modified by me, for testing methodology reasons
 void BenchmarkWorkingSetSweep(std::vector<long>& workingSet) {
+    //I asked copilot to write output to .csv files
+    std::ofstream out("WorkingSetSweep.csv");
+    if(!out.is_open()){
+        std::cerr << "Error opening WorkingSetSweep.csv\n";
+        exit(1);
+    }
+    //
     const int trials = 20;
 
-    std::cout << "WS,avg_cycles,avg_instructions,avg_l1d_hitrate,avg_llc_hitrate\n";
+    out << "Working_Set_Size_Bytes,AVG_CPU_Cycles,AVG_CPU_Instructions,AVG_L1-D_Hitrate_Percentage,AVG_LLC_Hitrate_Percentage\n";
 
     for (long N : workingSet) {
         std::vector<long> x(N), y(N);
@@ -260,17 +273,28 @@ void BenchmarkWorkingSetSweep(std::vector<long>& workingSet) {
 
         }
 
-        std::cout << N << ","
+        out << N * sizeof(long) << ","
                   << (totalCycles / trials) << ","
                   << (totalInstr  / trials) << ","
-                  << (l1hitrate / (double)trials) << ","
-                  << (l3hitrate / (double)trials)
+                  << 100.0 * (l1hitrate / (double)trials) << ","
+                  << 100.0 * (l3hitrate / (double)trials)
                   << "\n";
+    }
+    out.close();
+    if(!out){
+        std::cerr << "WorkingSetSweep.csv: Write failed\n";
     }
 }
 
 
 void BenchmarkCacheMissImpact(long N, std::vector<size_t>& strides) {
+    //I asked copilot to write output to .csv files
+    std::ofstream out("CacheMissImpact.csv");
+    if(!out.is_open()){
+        std::cerr << "Error opening CacheMissImpact.csv\n";
+        exit(1);
+    }
+    //
     const int trials = 20;
 
     std::vector<long> x(N), y(N);
@@ -281,7 +305,7 @@ void BenchmarkCacheMissImpact(long N, std::vector<size_t>& strides) {
     x = GenerateRandomVector(N);
     y = GenerateRandomVector(N);
 
-    std::cout << "stride,avg_cycles,avg_L1_hitrate,avg_LLC_hitrate,avg_L1miss,avg_LLCmiss\n";
+    out << "Stride_Bytes,AVG_CPU_Cycles,AVG_L1-D_Hitrate_Percentage,AVG_LLC_Hitrate_Percentage,AVG_L1-D_Miss_Count,AVG_LLC_Miss_Count\n";
 
     for (size_t stride : strides) {
         if (stride == 0) continue;
@@ -339,13 +363,17 @@ void BenchmarkCacheMissImpact(long N, std::vector<size_t>& strides) {
             llchitrate += 1.0 - (llc.value / (double)llcaccesses.value);
         }
 
-        std::cout << stride << ","
+        out << stride * 8 << ","
                   << (totalCycles / trials) << ","
-                  << (l1hitrate / (double)trials) << ","
-                  << (llchitrate / (double)trials) << ","
+                  << 100.0 * (l1hitrate / (double)trials) << ","
+                  << 100.0 * (llchitrate / (double)trials) << ","
                   << (totalL1     / trials) << ","
                   << (totalLLC    / trials)
                   << "\n";
+    }
+    out.close();
+    if(!out){
+        std::cerr << "CacheMissImpact.csv: Write failed\n";
     }
 }
 
@@ -370,10 +398,17 @@ long* AllocateHugePageArray(size_t numElements) {
 void BenchmarkTLBImpact(std::vector<size_t>& pageSizes,
                         std::vector<size_t>& pageStrides)
 {
+    //I asked copilot to write output to .csv files
+    std::ofstream out("TLBMissImpact.csv");
+    if(!out.is_open()){
+        std::cerr << "Error opening TLBMissImpact.csv\n";
+        exit(1);
+    }
+    //
     const int trials = 20;
     long N = 8'388'608; // 64MB
 
-    std::cout << "pageSize,strideElems,avg_cycles,avg_dTLBmiss,avg_dTLB_hitrate\n";
+    out << "PageSize_Bytes,Stride_Elements,AVG_CPU_Cycles,AVG_DataTLB_Miss_Count,AVG_DataTLB_HitRate_Percentage\n";
 
     // --- Small pages (std::vector)
     std::vector<long> x(N), y(N);
@@ -416,21 +451,29 @@ void BenchmarkTLBImpact(std::vector<size_t>& pageSizes,
             tlbhitrate += 1.0 - (tlb.value / (double)tlbaccesses.value);
         }
 
-        std::cout << pageSizes[0] << "," << strideElems << ","
+        out << pageSizes[0] * 8 << "," << strideElems << ","
                   << (totalCycles / trials) << ","
                   << (totalTLB    / trials) << ","
-                  << (tlbhitrate / (double)trials)
+                  << 100.0 * (tlbhitrate / (double)trials)
                   << "\n";
     }
 
     // --- Huge pages
     long* xHuge = AllocateHugePageArray(N);
     long* yHuge = AllocateHugePageArray(N);
-    for (long i = 0; i < N; i++) {
-        xHuge[i] = i;
-        yHuge[i] = i * 2;
+    //for (long i = 0; i < N; i++) {
+    //    xHuge[i] = i;
+    //    yHuge[i] = i * 2;
+    //}
+    //I asked copilot again "how can I randomize the huge pages?", it gave this
+    std::random_device rd;
+    std::mt19937_64 gen(rd());
+    std::uniform_int_distribution<long> distrib(std::numeric_limits<long>::min(), std::numeric_limits<long>::max());
+
+    for(long i = 0; i < N; i++){
+        xHuge[i] = distrib(gen);
+        yHuge[i] = distrib(gen);
     }
-    //xHuge = GenerateRandomVector(N);
 
 
     for (size_t strideElems : pageStrides) {
@@ -466,11 +509,15 @@ void BenchmarkTLBImpact(std::vector<size_t>& pageSizes,
             tlbhitrate += 1.0 - (tlb.value / (double)tlbaccesses.value);
         }
 
-        std::cout << pageSizes[1] << "," << strideElems << ","
+        out << pageSizes[1] * 8 << "," << strideElems << ","
                   << (totalCycles / trials) << ","
                   << (totalTLB    / trials) << ","
-                  << (tlbhitrate / (double)trials)
+                  << 100.0 * (tlbhitrate / (double)trials)
                   << "\n";
+    }
+    out.close();
+    if(!out){
+        std::cerr << "TLBMissImpact.csv: Write failed\n";
     }
 }
 
@@ -551,7 +598,7 @@ int main(){
     //-->AXPY
 
     //end here
-    return 1;
+    return 0;
     //NOTE: how to compile and run properly: gcc project2cache.cpp -lstdc++ -o project2cache.exe
     //that -lstdc++ is what causes the linker for the libraries to work
     //NOTE: you must also run this with sudo or else the perf benchmark counters won't work
