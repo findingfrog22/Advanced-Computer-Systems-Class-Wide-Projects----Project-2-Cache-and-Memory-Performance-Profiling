@@ -67,7 +67,9 @@ touch IntensitySweep.txt
 > IntensitySweep.txt
 
 echo "Note: Cache capacities and buffer sizes are based on CPU model, so you may need to adjust it for yours (test is i5 1135g7)"
-<<'COMMENT_BLOCK'
+echo "Note: Cache/TLB hit rates and misses are based on read operations"
+echo "Note: L2 cache will not be analyzed with perf counters due to its highly non-portable nature"
+
 #Intel MLC Benchmarking (Parts 1-4):
 #1.) Zero-queue baselines: per-level latency table with units and CPU-frequency conversion where useful.
 echo "L1-I 16KB:\n" >> ZeroQueueBaselines.txt
@@ -143,7 +145,7 @@ sudo ./mlc --loaded_latency -W6 | tee -a ReadWriteMixSweep.txt #basically 100% w
 #use sudo ./mlc --loaded_latency -d(injected latency ns)
 echo "Note: Throughput is Bandwidth in GB/s, plot with latency, not injected delay.\n" >> IntensitySweep.txt
 sudo ./mlc --loaded_latency | tee -a IntensitySweep.txt #use the default for sweeping, it is easier
-COMMENT_BLOCK
+
 #for MLC, the ElementWiseMultiply kernel would have been good
 
 #then set up for kernel benchmarking
@@ -156,6 +158,11 @@ COMMENT_BLOCK
 #7.) TLB-miss impact: vary page locality and evaluate huge pages where possible.
 #-->Dot Product Reduction Kernel
 #8.) Show one benchmark pitfall, such as accidentally measuring cache reuse instead of DRAM, failing to pin threads, or allowing frequency scaling to distort results.
+
+#call the .cpp file that does #5-8 for you
+echo "Running .cpp file for #5-7 (WorkingSet, CacheMiss, TLBMiss), see .csv files for results (won't be printed here): \n"
+gcc project2cache.cpp -lstdc++ -o project2cache.exe #compile
+sudo ./project2cache.exe #run
 
 #NOTE: how to compile and run properly: gcc project2cache.cpp -lstdc++ -o project2cache.exe
 #that -lstdc++ is what causes the linker for the libraries to work
