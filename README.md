@@ -82,6 +82,8 @@ AI Use Note:
 - --> Support in the scripting (how to write to file output, how to elevate permissions, etc)
 - --> Code verification (2nd opinion, as I check first)
 - --> 2nd opinion on data results (I check first)
+- --> bouncing ideas off eachother for possible explanations
+- --> doing last minute polishing of my report explanations (I wrote the original explanations, but they were rough to read)
 - Gemini was used for:
 - --> Documentation on how to generate random numbers and random vectors
 - --> Assisting with required libraries for perf
